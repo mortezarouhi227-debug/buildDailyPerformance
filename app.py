@@ -1,7 +1,6 @@
 from flask import Flask, jsonify, request
 import os
-
-from build_daily_performance import build_daily_performance  # ← همین فایل تو
+from buildDailyPerformance import build_daily_performance  # ← توجه: با اسم فایل تو دقیقا همین باشه
 
 app = Flask(__name__)
 
@@ -9,21 +8,20 @@ def _authorized():
     expected = os.getenv("RUN_TOKEN")
     if not expected:
         return True
-    # هدر یا querystring
     token = request.headers.get("X-Run-Token") or request.args.get("token")
     return token == expected
 
 @app.get("/")
-def health():
+def home():
     return jsonify(status="ok", service="daily_performance")
 
-@app.route("/run-daily-performance", methods=["GET","POST"])
+@app.route("/run-daily-performance", methods=["GET", "POST"])
 def run_daily():
     if not _authorized():
         return jsonify(ok=False, error="unauthorized"), 401
     try:
         build_daily_performance()
-        return jsonify(ok=True, message="Daily_Performance built.")
+        return jsonify(ok=True, message="Daily_Performance built successfully.")
     except Exception as e:
         return jsonify(ok=False, error=str(e)), 500
 
