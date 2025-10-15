@@ -100,7 +100,7 @@ def build_daily_performance():
     ws_daily = ss.worksheet(DAILY_SHEET)
     ws_all   = ss.worksheet(ALL_DATA_SHEET)
 
-    # --- فیلترها (طبق اسکرین‌شات: B1, C1, E1) ---
+    # --- فیلترها ---
     B1 = ws_daily.acell("B1").value   # Start
     C1 = ws_daily.acell("C1").value   # End
     E1 = ws_daily.acell("E1").value   # Shift یا All/Total
@@ -202,7 +202,7 @@ def build_daily_performance():
     table1 = [t1_header] + t1_rows
     ws_daily.update(range_name=f"A3:{a1(len(t1_header), 3+len(table1)-1)}", values=table1)
 
-    # --- جدول 2: Detailed بر اساس ترتیب جدول 1 ---
+    # --- جدول ۲: Detailed بر اساس ترتیب جدول ۱ ---
     t2_header = ["full_name"]
     for t in TASK_TYPES:
         t2_header += [
@@ -232,22 +232,23 @@ def build_daily_performance():
                 ]
         t2_rows.append(out)
 
-    start_col_t2 = len(t1_header) + 2
+    start_col_t2 = len(t1_header) + 2  # ستون شروع جدول ۲ (full_name)
     ws_daily.update(
         range_name=f"{a1(start_col_t2, 3)}:{a1(start_col_t2 + len(t2_header)-1, 3+len(t2_rows))}",
         values=[t2_header] + t2_rows
     )
 
-    # --- فرمت درصدها ---
+    # --- فرمت‌ها ---
+    # جدول ۱: ستون‌های درصد
     end_row1 = 3 + len(table1) - 1
     ss.batch_update({
         "requests": [
-            {   # جدول 1 → ستون‌های 5 و 6
+            {
                 "repeatCell": {
                     "range": {
                         "sheetId": ws_daily.id,
                         "startRowIndex": 2, "endRowIndex": end_row1,
-                        "startColumnIndex": 4, "endColumnIndex": 6
+                        "startColumnIndex": 4, "endColumnIndex": 6  # 5 و 6 یک‌پایه → اینجا صفرپایه
                     },
                     "cell": {"userEnteredFormat": {"numberFormat": {"type": "PERCENT", "pattern": "0.00%"}}},
                     "fields": "userEnteredFormat.numberFormat"
@@ -256,18 +257,37 @@ def build_daily_performance():
         ]
     })
 
+    # جدول ۲: فقط p0 و p1 درصد، Negative → عدد
     end_row2 = 3 + len(t2_rows)
     requests = []
     for b in range(len(TASK_TYPES)):
-        # در هر بلوک 5 ستون: qty, occ, neg, p0, p1  → دو تای آخر درصدند
-        start_col_idx = (start_col_t2-1) + 1 + b*5
-        for c in (start_col_idx+3, start_col_idx+4):
+        # ترتیب: full_name | qty(+1), occ(+2), neg(+3), p0(+4), p1(+5)
+        base = start_col_t2 + 1 + b*5      # ← شروع ستون qty برای این تسک
+        neg_col = base + 2                 # Negative_Minutes
+        p0_col  = base + 3                 # performance_without_rotation
+        p1_col  = base + 4                 # performance_with_rotation
+
+        # Negative_Minutes → عدد ساده
+        requests.append({
+            "repeatCell": {
+                "range": {
+                    "sheetId": ws_daily.id,
+                    "startRowIndex": 2, "endRowIndex": end_row2,
+                    "startColumnIndex": neg_col-1, "endColumnIndex": neg_col
+                },
+                "cell": {"userEnteredFormat": {"numberFormat": {"type": "NUMBER", "pattern": "0"}}},
+                "fields": "userEnteredFormat.numberFormat"
+            }
+        })
+
+        # p0 و p1 → درصد
+        for col in (p0_col, p1_col):
             requests.append({
                 "repeatCell": {
                     "range": {
                         "sheetId": ws_daily.id,
                         "startRowIndex": 2, "endRowIndex": end_row2,
-                        "startColumnIndex": c-1, "endColumnIndex": c
+                        "startColumnIndex": col-1, "endColumnIndex": col
                     },
                     "cell": {"userEnteredFormat": {"numberFormat": {"type": "PERCENT", "pattern": "0.00%"}}},
                     "fields": "userEnteredFormat.numberFormat"
@@ -281,4 +301,5 @@ def build_daily_performance():
 # اجرای مستقیم
 if __name__ == "__main__":
     build_daily_performance()
+
 
