@@ -16,7 +16,7 @@ SCOPES = [
 
 TASK_TYPES = [
     "Receive","Locate","Sort","Pack_Multi","Pack_Single",
-    "Pick_Small","Presort_Small","Stock taking","Pick_Larg","Presort_Larg",
+    "Pick","Presort","Stock taking","Pick_Larg","Presort_Larg",
 ]
 
 # ========= اتصال =========
