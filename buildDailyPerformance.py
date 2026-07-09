@@ -14,9 +14,10 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
+# ====== تغییر: حذف Pick_Larg و Presort_Larg، اضافه کردن FBM ======
 TASK_TYPES = [
     "Receive","Locate","Sort","Pack_Multi","Pack_Single",
-    "Pick","Presort","Stock taking","Pick_Larg","Presort_Larg",
+    "Pick","Presort","Stock taking","FBM",
 ]
 
 # ========= اتصال =========
@@ -301,5 +302,3 @@ def build_daily_performance():
 # اجرای مستقیم
 if __name__ == "__main__":
     build_daily_performance()
-
-
