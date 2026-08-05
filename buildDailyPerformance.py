@@ -14,7 +14,6 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
-# ====== تغییر: حذف Pick_Larg و Presort_Larg، اضافه کردن FBM ======
 TASK_TYPES = [
     "Receive","Locate","Sort","Pack_Multi","Pack_Single",
     "Pick","Presort","Stock taking","FBM",
@@ -36,7 +35,6 @@ def serial_to_datetime(n):
     return base + timedelta(days=float(n))
 
 def parse_date_floor(v):
-    """B1/C1 را (هر فرمتی: سریال، YYYY-MM-DD، MM/DD/YYYY، …) به datetime در ساعت 00:00 تبدیل می‌کند."""
     if v in (None, ""): return None
     try:
         f = float(v)
@@ -80,7 +78,6 @@ def to_number_locale(x, default=0.0):
         return default
 
 def to_percent_locale(x, default=None):
-    """58.9% → 0.589 ، ۱۳۱٫۵٪ → 1.315 ، 0.78 → 0.78"""
     val = to_number_locale(x, default=None)
     if val is None: return default
     if 0 <= val <= 1: return val
@@ -102,9 +99,9 @@ def build_daily_performance():
     ws_all   = ss.worksheet(ALL_DATA_SHEET)
 
     # --- فیلترها ---
-    B1 = ws_daily.acell("B1").value   # Start
-    C1 = ws_daily.acell("C1").value   # End
-    E1 = ws_daily.acell("E1").value   # Shift یا All/Total
+    B1 = ws_daily.acell("B1").value
+    C1 = ws_daily.acell("C1").value
+    E1 = ws_daily.acell("E1").value
 
     start_dt = parse_date_floor(B1)
     end_dt   = parse_date_floor(C1)
@@ -143,8 +140,8 @@ def build_daily_performance():
         return
 
     # --- تجمیع ---
-    summary  = {}  # name -> {quantity, occupied, negative, p0(list), p1(list)}
-    detailed = {}  # name -> task -> همان ساختار
+    summary  = {}
+    detailed = {}
 
     for r in rows:
         d0 = parse_date_floor(r[c_date])
@@ -155,7 +152,7 @@ def build_daily_performance():
 
         name = r[c_full]
         task = str(r[c_task]).strip()
-        if task == "Pack":   # فقط Pack_Multi/Single
+        if task not in TASK_TYPES:
             continue
 
         qty = to_number_locale(r[c_qty], 0.0)
@@ -191,19 +188,60 @@ def build_daily_performance():
         ]])
         return
 
-    # --- جدول 1: Summary ---
-    t1_header = ["full_name","quantity","occupied_hours","Negative_Minutes","performance_without_rotation","performance_with_rotation"]
+    # ========= جدول 1: Summary با Weighted Average =========
+    t1_header = [
+        "full_name",
+        "quantity",
+        "occupied_hours",
+        "Negative_Minutes",
+        "performance_without_rotation",
+        "performance_with_rotation",
+        "weighted_avg_performance"
+    ]
+    
     t1_rows = []
     for name, s in summary.items():
         p0_avg = (sum(s["p0"])/len(s["p0"])) if s["p0"] else None
         p1_avg = (sum(s["p1"])/len(s["p1"])) if s["p1"] else None
-        t1_rows.append([name, s["quantity"] or "", s["occupied"] or "", s["negative"] or "", p0_avg if p0_avg is not None else "", p1_avg if p1_avg is not None else ""])
-    t1_rows.sort(key=lambda r: (r[5] if isinstance(r[5], (int,float)) else -1), reverse=True)
-
+        
+        # محاسبه weighted average بر اساس دقیقه (quantity)
+        weighted_avg = None
+        if name in detailed:
+            total_weighted = 0.0
+            total_minutes = 0.0
+            
+            for task, task_data in detailed[name].items():
+                if task_data["p1"] and task_data["quantity"] > 0:
+                    task_p1_avg = sum(task_data["p1"]) / len(task_data["p1"])
+                    total_weighted += task_data["quantity"] * task_p1_avg
+                    total_minutes += task_data["quantity"]
+            
+            if total_minutes > 0:
+                weighted_avg = total_weighted / total_minutes
+        
+        t1_rows.append([
+            name,
+            s["quantity"] or "",
+            s["occupied"] or "",
+            s["negative"] or "",
+            p0_avg if p0_avg is not None else "",
+            p1_avg if p1_avg is not None else "",
+            weighted_avg if weighted_avg is not None else ""
+        ])
+    
+    # مرتب‌سازی بر اساس weighted_avg
+    t1_rows.sort(
+        key=lambda r: (r[6] if isinstance(r[6], (int, float)) else -1),
+        reverse=True
+    )
+    
     table1 = [t1_header] + t1_rows
-    ws_daily.update(range_name=f"A3:{a1(len(t1_header), 3+len(table1)-1)}", values=table1)
+    ws_daily.update(
+        range_name=f"A3:{a1(len(t1_header), 3+len(table1)-1)}",
+        values=table1
+    )
 
-    # --- جدول ۲: Detailed بر اساس ترتیب جدول ۱ ---
+    # --- جدول ۲: Detailed ---
     t2_header = ["full_name"]
     for t in TASK_TYPES:
         t2_header += [
@@ -233,64 +271,80 @@ def build_daily_performance():
                 ]
         t2_rows.append(out)
 
-    start_col_t2 = len(t1_header) + 2  # ستون شروع جدول ۲ (full_name)
+    start_col_t2 = len(t1_header) + 1
     ws_daily.update(
         range_name=f"{a1(start_col_t2, 3)}:{a1(start_col_t2 + len(t2_header)-1, 3+len(t2_rows))}",
         values=[t2_header] + t2_rows
     )
 
     # --- فرمت‌ها ---
-    # جدول ۱: ستون‌های درصد
     end_row1 = 3 + len(table1) - 1
+    end_row2 = 3 + len(t2_rows)
+    
+    # جدول ۱: ستون‌های 5، 6 و 7 به صورت درصد
     ss.batch_update({
         "requests": [
             {
                 "repeatCell": {
                     "range": {
                         "sheetId": ws_daily.id,
-                        "startRowIndex": 2, "endRowIndex": end_row1,
-                        "startColumnIndex": 4, "endColumnIndex": 6  # 5 و 6 یک‌پایه → اینجا صفرپایه
+                        "startRowIndex": 2,
+                        "endRowIndex": end_row1,
+                        "startColumnIndex": 4,
+                        "endColumnIndex": 7
                     },
-                    "cell": {"userEnteredFormat": {"numberFormat": {"type": "PERCENT", "pattern": "0.00%"}}},
+                    "cell": {
+                        "userEnteredFormat": {
+                            "numberFormat": {"type": "PERCENT", "pattern": "0.00%"}
+                        }
+                    },
                     "fields": "userEnteredFormat.numberFormat"
                 }
             }
         ]
     })
 
-    # جدول ۲: فقط p0 و p1 درصد، Negative → عدد
-    end_row2 = 3 + len(t2_rows)
+    # جدول ۲: فرمت‌دهی
     requests = []
     for b in range(len(TASK_TYPES)):
-        # ترتیب: full_name | qty(+1), occ(+2), neg(+3), p0(+4), p1(+5)
-        base = start_col_t2 + 1 + b*5      # ← شروع ستون qty برای این تسک
-        neg_col = base + 2                 # Negative_Minutes
-        p0_col  = base + 3                 # performance_without_rotation
-        p1_col  = base + 4                 # performance_with_rotation
+        base = start_col_t2 + 1 + b*5
+        neg_col = base + 2
+        p0_col  = base + 3
+        p1_col  = base + 4
 
-        # Negative_Minutes → عدد ساده
         requests.append({
             "repeatCell": {
                 "range": {
                     "sheetId": ws_daily.id,
-                    "startRowIndex": 2, "endRowIndex": end_row2,
-                    "startColumnIndex": neg_col-1, "endColumnIndex": neg_col
+                    "startRowIndex": 2,
+                    "endRowIndex": end_row2,
+                    "startColumnIndex": neg_col-1,
+                    "endColumnIndex": neg_col
                 },
-                "cell": {"userEnteredFormat": {"numberFormat": {"type": "NUMBER", "pattern": "0"}}},
+                "cell": {
+                    "userEnteredFormat": {
+                        "numberFormat": {"type": "NUMBER", "pattern": "0"}
+                    }
+                },
                 "fields": "userEnteredFormat.numberFormat"
             }
         })
 
-        # p0 و p1 → درصد
         for col in (p0_col, p1_col):
             requests.append({
                 "repeatCell": {
                     "range": {
                         "sheetId": ws_daily.id,
-                        "startRowIndex": 2, "endRowIndex": end_row2,
-                        "startColumnIndex": col-1, "endColumnIndex": col
+                        "startRowIndex": 2,
+                        "endRowIndex": end_row2,
+                        "startColumnIndex": col-1,
+                        "endColumnIndex": col
                     },
-                    "cell": {"userEnteredFormat": {"numberFormat": {"type": "PERCENT", "pattern": "0.00%"}}},
+                    "cell": {
+                        "userEnteredFormat": {
+                            "numberFormat": {"type": "PERCENT", "pattern": "0.00%"}
+                        }
+                    },
                     "fields": "userEnteredFormat.numberFormat"
                 }
             })
