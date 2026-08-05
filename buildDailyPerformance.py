@@ -204,20 +204,20 @@ def build_daily_performance():
         p0_avg = (sum(s["p0"])/len(s["p0"])) if s["p0"] else None
         p1_avg = (sum(s["p1"])/len(s["p1"])) if s["p1"] else None
         
-        # محاسبه weighted average بر اساس دقیقه (quantity)
+        # محاسبه weighted average = Σ (occupied_hours × performance) / Σ occupied_hours
         weighted_avg = None
         if name in detailed:
             total_weighted = 0.0
-            total_minutes = 0.0
+            total_occupied = 0.0
             
             for task, task_data in detailed[name].items():
-                if task_data["p1"] and task_data["quantity"] > 0:
+                if task_data["p1"] and task_data["occupied"] > 0:
                     task_p1_avg = sum(task_data["p1"]) / len(task_data["p1"])
-                    total_weighted += task_data["quantity"] * task_p1_avg
-                    total_minutes += task_data["quantity"]
+                    total_weighted += task_data["occupied"] * task_p1_avg
+                    total_occupied += task_data["occupied"]
             
-            if total_minutes > 0:
-                weighted_avg = total_weighted / total_minutes
+            if total_occupied > 0:
+                weighted_avg = total_weighted / total_occupied
         
         t1_rows.append([
             name,
@@ -229,7 +229,7 @@ def build_daily_performance():
             weighted_avg if weighted_avg is not None else ""
         ])
     
-    # مرتب‌سازی بر اساس weighted_avg
+    # مرتب‌سازی بر اساس weighted_avg (بهترین عملکرد در بالا)
     t1_rows.sort(
         key=lambda r: (r[6] if isinstance(r[6], (int, float)) else -1),
         reverse=True
