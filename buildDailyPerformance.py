@@ -191,7 +191,7 @@ def build_daily_performance():
         ]])
         return
 
-    # ========= 🆕 جدول 1: Summary با ستون جدید =========
+    # ========= جدول 1: Summary با ستون جدید =========
     t1_header = [
         "full_name",
         "quantity",
@@ -199,7 +199,7 @@ def build_daily_performance():
         "Negative_Minutes",
         "performance_without_rotation",
         "performance_with_rotation",
-        "weighted_avg_performance"  # 🆕 ستون جدید
+        "weighted_avg_performance"
     ]
     
     t1_rows = []
@@ -207,7 +207,7 @@ def build_daily_performance():
         p0_avg = (sum(s["p0"])/len(s["p0"])) if s["p0"] else None
         p1_avg = (sum(s["p1"])/len(s["p1"])) if s["p1"] else None
         
-        # 🆕 محاسبه Weighted Average
+        # محاسبه Weighted Average
         weighted_avg = None
         if name in detailed:
             total_weighted = 0.0
@@ -229,10 +229,10 @@ def build_daily_performance():
             s["negative"] or "",
             p0_avg if p0_avg is not None else "",
             p1_avg if p1_avg is not None else "",
-            weighted_avg if weighted_avg is not None else ""  # 🆕
+            weighted_avg if weighted_avg is not None else ""
         ])
     
-    # 🆕 مرتب‌سازی بر اساس weighted_avg
+    # مرتب‌سازی بر اساس weighted_avg
     t1_rows.sort(
         key=lambda r: (r[6] if isinstance(r[6], (int, float)) else -1),
         reverse=True
@@ -274,15 +274,16 @@ def build_daily_performance():
                 ]
         t2_rows.append(out)
 
-    # 🆕 شروع جدول دوم از ستون 8 (چون 7 ستون داریم)
-    start_col_t2 = len(t1_header) + 1
+    # 🆕 شروع جدول دوم با یک ستون فاصله از جدول اول
+    # جدول اول 7 ستون دارد + 1 ستون فاصله = شروع از ستون 9
+    start_col_t2 = len(t1_header) + 2  # 7 + 2 = 9
     ws_daily.update(
         range_name=f"{a1(start_col_t2, 3)}:{a1(start_col_t2 + len(t2_header)-1, 3+len(t2_rows))}",
         values=[t2_header] + t2_rows
     )
 
     # --- فرمت‌ها ---
-    # 🆕 جدول ۱: ستون‌های 5، 6 و 7 به صورت درصد
+    # جدول ۱: ستون‌های 5، 6 و 7 به صورت درصد
     end_row1 = 3 + len(table1) - 1
     ss.batch_update({
         "requests": [
@@ -293,7 +294,7 @@ def build_daily_performance():
                         "startRowIndex": 2,
                         "endRowIndex": end_row1,
                         "startColumnIndex": 4,
-                        "endColumnIndex": 7  # 🆕 از ستون E تا G
+                        "endColumnIndex": 7
                     },
                     "cell": {
                         "userEnteredFormat": {
